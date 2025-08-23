@@ -1,0 +1,25 @@
+# build artifacts
+/build/
+/cmake-build-*/
+*.o
+*.obj
+*.exe
+*.out
+*.a
+*.lib
+*.dll
+*.so
+*.dylib
+
+# editors
+.vscode/
+.idea/
+*.swp
+*.swo
+.tags
+compile_commands.json
+
+# mac/win
+.DS_Store
+Thumbs.db
+
