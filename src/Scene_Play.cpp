@@ -6,38 +6,48 @@
 #include "../include/Action.h"
 
 #include <iostream>
+#include <fstream>
 
 Scene_Play::Scene_Play(GameEngine * gameEngine, const std::string & levelPath)
     : Scene(gameEngine)
     , m_levelPath(levelPath)
+    , m_gridText(gameEngine->assets().getFont("Tech"),"", 12)
 {
-    init(m_levelPath);
 }
 
-void Scene_Play::init(const std::string & levelPath)
+void Scene_Play::init()
 {
-    registerAction(sf::Keyboard::Scan::P,      "PAUSE");
-    registerAction(sf::Keyboard::Scan::Escape, "QUIT");
-    registerAction(sf::Keyboard::Scan::T,      "TOGGLE_TEXTURE");
-    registerAction(sf::Keyboard::Scan::C,      "TOGGLE_COLLISION");
-    registerAction(sf::Keyboard::Scan::G,      "TOGGLE_GRID");
+    std::ifstream fin(m_levelPath);
+    if (!fin)
+    {
+        std::cerr << "[Level] Missing '" << m_levelPath << "', using fallback\n";
+
+        // Minimal test entity so you see something
+        auto e = m_entityManager.addEntity("debug");
+        e->addComponent<CTransform>(Vec2(200.f, 200.f));
+        e->addComponent<CBoundingBox>(Vec2(64.f, 64.f));
+        e->addComponent<CShape>(Vec2{64.f, 64.f}, sf::Color::Green, sf::Color::Black, 2.f);
+        m_player = e;
+        return;
+    }
+
+
+    registerAction(static_cast<int>(sf::Keyboard::Scancode::P),      "PAUSE");
+    registerAction(static_cast<int>(sf::Keyboard::Scancode::Escape), "QUIT");
+    registerAction(static_cast<int>(sf::Keyboard::Scancode::T),      "TOGGLE_TEXTURE");
+    registerAction(static_cast<int>(sf::Keyboard::Scancode::C),      "TOGGLE_COLLISION");
+    registerAction(static_cast<int>(sf::Keyboard::Scancode::G),      "TOGGLE_GRID");
 
     // TODO: Register all other gameplay Actions
 
 
     m_gridText.setCharacterSize(12);
     m_gridText.setFont(m_game->assets().getFont("Tech"));
-
-    loadLevel(levelPath);
 }
 
-Vec2 Scene_Play::gridToMidPixel(float gridX, float gridY, std::shared_ptr<Entity> entity)
-{
-    // TODO: This function takes in a grid (x,y) posisition and an Entity
-    //       Return a Vec2 indicating where the CENTER position of the Entity should be
-    //       You must use the Entity's Animation size to posisition it correctly
-    //       The size of the grid width and height is stored in m_gridSize.x and m_gridSize.y
-    //       The bottom-left corner of the Animation should align with the bottom left of the grid cell
+Vec2 Scene_Play::gridToMidPixel(float gx, float gy, std::shared_ptr<Entity>) {
+    return { gx * m_gridSize.x + m_gridSize.x * 0.5f,
+             gy * m_gridSize.y + m_gridSize.y * 0.5f };
 }
 
 void Scene_Play::loadLevel(const std::string & filename)
@@ -109,14 +119,14 @@ void Scene_Play::spawnBullet(std::shared_ptr<Entity> entity)
 
 void Scene_Play::update()
 {
-    m_entityManger.update()
+    m_entityManager.update();
 
     // TODO: implement pause functionality
 
     sMovement();
     sLifespan();
     sCollision();
-    sAnimation():
+    //sAnimation();
     sRender();
 }
 
@@ -136,8 +146,6 @@ void Scene_Play::sMovement()
     {
         if (e->hasComponent<CGravity>())
         {
-            e->getComponent<CTransform>().velocity.y += e->getComponent<CGravity>().gravity;
-
             // if the playeris moving faster than max speed in any direction
             // set its speed in that direction to the max speed
         }
@@ -178,9 +186,9 @@ void Scene_Play::sCollision()
 
 void Scene_Play::sDoAction(const Action& action)
 {
-    if (action.type() == "START")
+    if (action.isStart())
     {
-            if (action.name() == "TOGGLE_TEXTURE")      { m_drawTextures = !m_drawTextures; }
+       if      (action.name() == "TOGGLE_TEXTURE")      { m_drawTextures = !m_drawTextures; }
        else if (action.name() == "TOGGLE_COLLISION")    { m_drawCollision = !m_drawCollision; }
        else if (action.name() == "TOGGLE_GRID")         { m_drawGrid = !m_drawGrid; }
        else if (action.name() == "PAUSE")               { setPaused(!m_paused); }
@@ -188,7 +196,7 @@ void Scene_Play::sDoAction(const Action& action)
        else if (action.name() == "UP")                  { m_player->getComponent<CInput>().up = true;}
     }
 
-    else if (action.type() == "END")
+    else if (action.isEnd())
     {
         if (action.name() == "UP")
         {
@@ -229,9 +237,9 @@ void Scene_Play::sRender()
 
     // set the viewport of teh window to be centered on the player if it's far enough right
     auto & pPos = m_player->getComponent<CTransform>().pos;
-    float windowCenterX = std::max(m_game->windwo().getSize().x / 2.0f, pPos.x);
+    float windowCenterX = std::max(m_game->window().getSize().x / 2.0f, pPos.x);
     sf::View view = m_game->window().getView();
-    view.setCenter(windowCenterX, m_game->window().getSize().y - view.getCenter().y);
+    view.setCenter(sf::Vector2f{windowCenterX, m_game->window().getSize().y - view.getCenter().y});
 
     // draw al Entity textures / animations
     if (m_drawTextures)
@@ -243,9 +251,9 @@ void Scene_Play::sRender()
             if (e->hasComponent<CAnimation>())
             {
                 auto & animation = e->getComponent<CAnimation>().animation;
-                animation.getSprite().setRotation(transform.angle);
-                animation.getSprite().setPosition(transform.pos.x, transform.pos.y);
-                animation.getSprite().setScale(transform.scale.x, transform.scale.y);
+                animation.getSprite().setRotation(sf::degrees(transform.angle));
+                animation.getSprite().setPosition(sf::Vector2f(transform.pos.x, transform.pos.y));
+                animation.getSprite().setScale(sf::Vector2f(transform.scale.x, transform.scale.y));
                 m_game->window().draw(animation.getSprite());
             }
         }
@@ -254,16 +262,16 @@ void Scene_Play::sRender()
     // draw all Entity collision bounding boxes with a rectangleshape
     if (m_drawCollision)
     {
-        for (auto e : m_entityManger.getEntities())
+        for (auto e : m_entityManager.getEntities())
         {
-            if (e->hasComponent<CBoundingBox>());
+            if (e->hasComponent<CBoundingBox>())
             {
                 auto & box = e->getComponent<CBoundingBox>();
-                auto & transform = e->getComponent<CTranform>();
+                auto & transform = e->getComponent<CTransform>();
                 sf::RectangleShape rect;
                 rect.setSize(sf::Vector2f(box.size.x-1, box.size.y-1));
                 rect.setOrigin(sf::Vector2f(box.halfSize.x, box.halfSize.y));
-                rect.setPosition(transform.pos.x, transform.pos.y);
+                rect.setPosition(sf::Vector2f{transform.pos.x, transform.pos.y});
                 rect.setFillColor(sf::Color(0, 0, 0, 0));
                 rect.setOutlineColor(sf::Color(255, 255, 255, 255));
                 rect.setOutlineThickness(1);
@@ -275,8 +283,8 @@ void Scene_Play::sRender()
     // draw the grid so that students can easily debug
     if (m_drawGrid)
     {
-        float leftX = m_game->window().getView().getCenter().x - width() / 2;
-        float rightX = leftX + width() = m_gridSize.x;
+        float leftX = 0.f;
+        float rightX = leftX + m_gridSize.x;
         float nextGridX = leftX - ((int)leftX % (int)m_gridSize.x);
 
         for (float x = nextGridX; x < rightX; x += m_gridSize.x)
@@ -291,9 +299,9 @@ void Scene_Play::sRender()
             for (float x = nextGridX; x < rightX; x += m_gridSize.x)
             {
                 std::string xCell = std::to_string((int)x / (int)m_gridSize.x);
-                std::string yCell = std::to_string((int)x / (int)m_grisSize.y);
+                std::string yCell = std::to_string((int)x / (int)m_gridSize.y);
                 m_gridText.setString("(" + xCell + "," + yCell + ")");
-                m_gridText.setPosition(x + 3, height() - y - m_gridSize.y + 2);
+                m_gridText.setPosition(sf::Vector2f(x + 3, height() - y - m_gridSize.y + 2));
                 m_game->window().draw(m_gridText);
             }
         }

@@ -13,7 +13,8 @@ typedef std::tuple<
     CBoundingBox,
     CAnimation,
     CGravity,
-    CState
+    CState,
+    CShape
 > ComponentTuple;
 
 class Entity

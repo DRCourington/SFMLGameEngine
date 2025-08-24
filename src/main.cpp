@@ -1,9 +1,9 @@
-#include <SFML/Graphics.hpp>
+#include "../include/GameEngine.h"
 
-#include "../include/Game.h"
-
-int main()
+int main(int argc, char** argv)
 {
-    Game g("config.txt");
-    g.run();
+    const std::string assetsPath = (argc > 1) ? argv[1] : "config.txt"; // or "assets.txt" if that's your file
+    GameEngine game(assetsPath);
+    game.run();
+    return 0;
 }

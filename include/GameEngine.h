@@ -1,11 +1,11 @@
 #pragma once
 
-#include "Scene.h"
 #include "Assets.h"
+#include "Scene.h"
 
 #include <memory>
 
-typedef std::map<std::string, std::shared_ptr<Scene>> SceneMap;
+using SceneMap = std::map<std::string, std::shared_ptr<Scene>>;
 
 class GameEngine
 {
@@ -35,7 +35,11 @@ public:
     void quit();
     void run();
 
-    sf::RenderWindow & window();
-    const Assets& assets() const;
+    sf::RenderWindow& window() { return m_window; }
+    const sf::RenderWindow& window() const { return m_window; }
     bool isRunning();
+    Assets& assets() { return m_assets; }
+    const Assets& assets() const { return m_assets; }
+    Assets& getAssets() { return m_assets; }
+    const Assets& getAssets() const { return m_assets; }
 };

@@ -5,6 +5,8 @@
 
 #include <memory>
 
+class GameEngine;
+
 class Scene
 {
 
@@ -17,19 +19,19 @@ protected:
     bool            m_hasEnded = false;
     size_t          m_currentFrame = 0;
 
-    virtual void onEnd() = 0;
-    void setPaused(bool paused);
-
 public:
 
-    Scene();
+    virtual ~Scene() = default;
     Scene(GameEngine * gameEngine);
 
+    virtual void init() {}
+    virtual void onEnd() = 0;
     virtual void update() = 0;
     virtual void sDoAction(const Action & action) = 0;
+    void doAction(const Action& action) { sDoAction(action); }
     virtual void sRender() = 0;
 
-    virtual void doAction(const Action & action) = 0;
+    void setPaused(bool paused);
     void simulate(const size_t frames);
     void registerAction(int inputKey, const std::string& actionName);
 

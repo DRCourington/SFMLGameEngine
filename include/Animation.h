@@ -1,12 +1,12 @@
 #pragma once
 #include <SFML/Graphics.hpp>
-#include <vector>
+#include "Vec2.h"
 
 class Animation
 {
     sf::Sprite  m_sprite;
     size_t      m_frameCount   = 1;
-    size_t      m_currenFrame  = 0;
+    size_t      m_currentFrame  = 0;
     size_t      m_speed        = 0;
     Vec2        m_size         = { 1, 1};
     std::string m_name         = "none";

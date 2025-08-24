@@ -1,4 +1,3 @@
-// Assets.h
 #pragma once
 #include <SFML/Graphics.hpp>
 #include <SFML/Audio.hpp>
@@ -17,10 +16,16 @@ public:
     void loadTexture(const std::string& name, const std::string& path, bool smooth=true);
     void loadFont(const std::string& name, const std::string& path);
     void loadSound(const std::string& name, const std::string& path);
+    void loadFromFile(const std::string& path);
 
     const sf::Texture&    tex(const std::string& name)   const { return m_textures.at(name); }
     const sf::Font&       font(const std::string& name)  const { return m_fonts.at(name); }
     const sf::SoundBuffer& snd(const std::string& name)  const { return m_sounds.at(name); }
+
+    const sf::Texture&     getTexture   (const std::string& n) const;
+    const sf::Font&        getFont      (const std::string& n) const;
+    const sf::SoundBuffer& getSound     (const std::string& n) const;
+    const Animation&       getAnimation (const std::string& n) const;
 
     void addAnimation(const std::string& name, const Animation& a) { m_anims[name]=a; }
     const Animation& anim(const std::string& name) const { return m_anims.at(name); }
