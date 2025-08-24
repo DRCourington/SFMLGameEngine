@@ -82,6 +82,7 @@ enum class CollisionType { Circle, AABB, OBB };
 
 class CCollision {
 public:
+    bool has{false};
     CollisionType type = CollisionType::Circle;
     float radius   = 0.f;
     Vec2  halfSize {0.f, 0.f};
@@ -121,6 +122,7 @@ public:
 
 class CInput {
 public:
+    bool has{false};
     bool up={false};
     bool left={false};
     bool right={false};
@@ -133,6 +135,7 @@ public:
 
 class CState {
 public:
+    bool has{false};
     std::string state{"idle"};
     std::string prev {"idle"};
 

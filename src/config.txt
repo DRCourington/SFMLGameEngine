@@ -1,1 +1,3 @@
 Font Tech ../assets/fonts/Retro.ttf
+Texture MegaSheet ../assets/spritesheet/8bitmegaman.png
+Animation Idle MegaSheet 1 0

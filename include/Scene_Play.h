@@ -33,6 +33,7 @@ protected:
     bool                    m_drawGrid = false;
     sf::Vector2f            m_gridSize = {64, 64};
     sf::Text                m_gridText;
+    float                   m_moveSpeed = 4.0f;
 
     Vec2 gridToMidPixel(float gridX, float gridY,
                         std::shared_ptr<Entity> entity = nullptr);
@@ -42,6 +43,7 @@ protected:
     void loadLevel(const std::string & filename);
     void spawnBullet(std::shared_ptr<Entity> entity);
     void spawnPlayer();
+    void spawnBlock(float px, float py, int col, int row, float scale);
     void sMovement();
     void sLifespan();
     void sCollision();

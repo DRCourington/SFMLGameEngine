@@ -8,3 +8,4 @@ Entity::Entity(std::size_t id, const std::string& tag)
 
 bool Entity::isActive() const { return m_active; }
 const std::string& Entity::tag() const { return m_tag; }
+void Entity::destroy() { m_active = false; }

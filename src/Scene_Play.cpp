@@ -17,6 +17,23 @@ Scene_Play::Scene_Play(GameEngine * gameEngine, const std::string & levelPath)
 
 void Scene_Play::init()
 {
+
+    registerAction(static_cast<int>(sf::Keyboard::Scancode::W),      "UP");
+    registerAction(static_cast<int>(sf::Keyboard::Scancode::Up),     "UP");
+    registerAction(static_cast<int>(sf::Keyboard::Scancode::S),      "DOWN");
+    registerAction(static_cast<int>(sf::Keyboard::Scancode::Down),   "DOWN");
+    registerAction(static_cast<int>(sf::Keyboard::Scancode::A),      "LEFT");
+    registerAction(static_cast<int>(sf::Keyboard::Scancode::Left),   "LEFT");
+    registerAction(static_cast<int>(sf::Keyboard::Scancode::D),      "RIGHT");
+    registerAction(static_cast<int>(sf::Keyboard::Scancode::Right),  "RIGHT");
+
+    registerAction(static_cast<int>(sf::Keyboard::Scancode::P),      "PAUSE");
+    registerAction(static_cast<int>(sf::Keyboard::Scancode::Escape), "QUIT");
+    registerAction(static_cast<int>(sf::Keyboard::Scancode::T),      "TOGGLE_TEXTURE");
+    registerAction(static_cast<int>(sf::Keyboard::Scancode::C),      "TOGGLE_COLLISION");
+    registerAction(static_cast<int>(sf::Keyboard::Scancode::G),      "TOGGLE_GRID");
+
+
     std::ifstream fin(m_levelPath);
     if (!fin)
     {
@@ -28,18 +45,36 @@ void Scene_Play::init()
         e->addComponent<CBoundingBox>(Vec2(64.f, 64.f));
         e->addComponent<CShape>(Vec2{64.f, 64.f}, sf::Color::Green, sf::Color::Black, 2.f);
         m_player = e;
+        m_player->addComponent<CInput>();
+        m_player->addComponent<CGravity>(Vec2{0.f, 0.2f});
+
+        // add the animation
+        const Animation& idle = m_game->assets().getAnimation("Idle");
+        m_player->addComponent<CAnimation>(idle, /*repeat=*/false);
+        auto& tf = m_player->getComponent<CTransform>();
+        tf.scale = {4.f, 4.f};
+
+        // select the idle sprite on the sheet
+        // adjust these to your sheet’s grid:
+        const int frameW  = 32;   // try 32; if wrong, use 24 or 16
+        const int frameH  = 32;
+        const int idleCol = 3;    // column index of the idle frame
+        const int idleRow = 0;    // row index of the idle frame
+
+        sf::IntRect rect(sf::Vector2i{idleCol * frameW, idleRow * frameH},
+                        sf::Vector2i{frameW, frameH});
+
+        auto& anim = m_player->getComponent<CAnimation>().animation;
+        auto& spr  = anim.getSprite();
+        spr.setTextureRect(rect);
+        spr.setOrigin(sf::Vector2f{frameW * 0.5f, frameH * 0.5f});
+
+        spawnBlock(120.f, 360.f, 0, 0, 3.f);   // (px,py, col,row, scale)
+        spawnBlock(120.f+48.f, 360.f, 0, 0, 3.f);
+        spawnBlock(120.f+96.f, 360.f, 0, 0, 3.f);
+
         return;
     }
-
-
-    registerAction(static_cast<int>(sf::Keyboard::Scancode::P),      "PAUSE");
-    registerAction(static_cast<int>(sf::Keyboard::Scancode::Escape), "QUIT");
-    registerAction(static_cast<int>(sf::Keyboard::Scancode::T),      "TOGGLE_TEXTURE");
-    registerAction(static_cast<int>(sf::Keyboard::Scancode::C),      "TOGGLE_COLLISION");
-    registerAction(static_cast<int>(sf::Keyboard::Scancode::G),      "TOGGLE_GRID");
-
-    // TODO: Register all other gameplay Actions
-
 
     m_gridText.setCharacterSize(12);
     m_gridText.setFont(m_game->assets().getFont("Tech"));
@@ -117,6 +152,33 @@ void Scene_Play::spawnBullet(std::shared_ptr<Entity> entity)
     // TODO: this should spawn a bullet at the given entity, going in the direction the entity is facing
 }
 
+namespace {
+constexpr int TILE_W = 16;      // adjust if your sheet uses 32
+constexpr int TILE_H = 16;
+}
+
+void Scene_Play::spawnBlock(float px, float py, int col, int row, float scale)
+{
+    auto e = m_entityManager.addEntity("tile");
+    e->addComponent<CTransform>(Vec2(px, py));
+    e->getComponent<CTransform>().scale = {2.f, 2.f};
+
+    // collision box matches visual size
+    e->addComponent<CBoundingBox>(Vec2{TILE_W * scale, TILE_H * scale});
+
+    // 1-frame anim using the sheet, then crop to one tile
+    const Animation& sheet = m_game->assets().getAnimation("BlocksSheet");
+    e->addComponent<CAnimation>(sheet, false);
+
+    sf::IntRect rect(sf::Vector2i{col * TILE_W, row * TILE_H},
+                    sf::Vector2i{TILE_W,       TILE_H});
+    auto& spr = e->getComponent<CAnimation>().animation.getSprite();
+    spr.setTextureRect(rect);
+    spr.setOrigin(sf::Vector2f{TILE_W * 0.5f, TILE_H * 0.5f});
+}
+
+
+
 void Scene_Play::update()
 {
     m_entityManager.update();
@@ -128,6 +190,45 @@ void Scene_Play::update()
     sCollision();
     //sAnimation();
     sRender();
+
+    if (m_player)
+    {
+        auto& tf = m_player->getComponent<CTransform>();
+        auto& in = m_player->getComponent<CInput>();
+
+        const float accel     = 0.8f;
+        const float maxSpeedX = 6.0f;
+        const float maxSpeedY = 12.0f;
+        const float damping   = 0.88f;
+
+        Vec2 a{0.f, 0.f};
+        if (in.left)  a.x -= accel;
+        if (in.right) a.x += accel;
+        if (in.up)    a.y -= accel;
+        if (in.down)  a.y += accel;
+
+        if (m_player->hasComponent<CGravity>())
+        {
+            a.y += m_player->getComponent<CGravity>().gravity.y;
+        }
+
+        tf.velocity.x += a.x;
+        tf.velocity.y += a.y;
+
+        if (tf.velocity.x >  maxSpeedX) tf.velocity.x =  maxSpeedX;
+        if (tf.velocity.x < -maxSpeedX) tf.velocity.x = -maxSpeedX;
+        if (tf.velocity.y >  maxSpeedY) tf.velocity.y =  maxSpeedY;
+        if (tf.velocity.y < -maxSpeedY) tf.velocity.y = -maxSpeedY;
+
+        // simple, unnormalized movement
+        tf.pos.x += tf.velocity.x;
+        tf.pos.y += tf.velocity.y;
+
+        tf.velocity.x *= damping;
+        tf.velocity.y *= damping;
+    }
+
+
 }
 
 void Scene_Play::sMovement()
@@ -166,42 +267,106 @@ void Scene_Play::sLifespan()
 
 void Scene_Play::sCollision()
 {
-    // REMEMBER: SFML's (0,0) position is on the TOP-LEFT corner
-    //           This means jumping will have a negative y-component
-    //           and gravity will have a positive y-component
-    //           Also, something BELOW something else will have a y value GREATER than it
-    //           Also, something ABOVE something else will have a y value LESS than it
+    if (!m_player || !m_player->hasComponent<CBoundingBox>()) return;
 
-    // TODO: Implement Physics::GetOverlap() function, use it inside this function
+    auto& ptf = m_player->getComponent<CTransform>();
+    auto& pbb = m_player->getComponent<CBoundingBox>();
 
-    // TODO: Implement bullet / tile collisions
-    //       Destroy the tile if it has a Brick animation
-    // TODO: Implement player / tile collisions and resolutions
-    //       Update the CState component of the player to store whether
-    //       it is currently on the ground or in the air. This will be
-    //       used by the Animation system
-    // TODO: Check to see if the player has fallen down a hole (y > height())
-    // TODO: Dont let the player walk off the left side of the map
+    bool onGround = false;
+
+    // player vs tiles
+    for (auto& t : m_entityManager.getEntities("tile")) {
+        if (!t->hasComponent<CBoundingBox>()) continue;
+
+        Vec2 ov  = Physics::GetOverlap(m_player, t);
+        if (ov.x <= 0.f || ov.y <= 0.f) continue;
+
+        const auto& ttf = t->getComponent<CTransform>();
+        const auto& tbb = t->getComponent<CBoundingBox>();
+
+        // center deltas (account for offsets)
+        const Vec2 pc{ ptf.pos.x + pbb.offset.x, ptf.pos.y + pbb.offset.y };
+        const Vec2 tc{ ttf.pos.x + tbb.offset.x, ttf.pos.y + tbb.offset.y };
+        const float dx = tc.x - pc.x;
+        const float dy = tc.y - pc.y;
+
+        // choose axis with smaller penetration
+        if (ov.y < ov.x) {
+            if (dy > 0.f) {           // tile is below -> land on top
+                ptf.pos.y -= ov.y;
+                onGround = true;
+            } else {                   // hit head on tile above
+                ptf.pos.y += ov.y;
+            }
+            ptf.velocity.y = 0.f;
+        } else {
+            if (dx > 0.f) ptf.pos.x -= ov.x;   // tile is right
+            else          ptf.pos.x += ov.x;   // tile is left
+            ptf.velocity.x = 0.f;
+        }
+    }
+
+    // update grounded/air state
+    if (m_player->hasComponent<CState>()) {
+        auto& st = m_player->getComponent<CState>();
+        st.prev  = st.state;
+        st.state = onGround ? "ground" : "air";
+    }
+
+    // keep player within left boundary
+    if (ptf.pos.x - pbb.halfSize.x < 0.f) {
+        ptf.pos.x = pbb.halfSize.x;
+        ptf.velocity.x = 0.f;
+    }
+
+    // fell in a hole (below screen)
+    if (ptf.pos.y - pbb.halfSize.y > static_cast<float>(height())) {
+        // simple respawn; adjust to your spawn system
+        ptf.pos = Vec2{200.f, 200.f};
+        ptf.velocity = Vec2{0.f, 0.f};
+    }
+
+    // bullets vs tiles (optional; requires entities tagged "bullet")
+    for (auto& b : m_entityManager.getEntities("bullet")) {
+        if (!b->hasComponent<CBoundingBox>()) continue;
+
+        for (auto& t : m_entityManager.getEntities("tile")) {
+            if (!t->hasComponent<CBoundingBox>()) continue;
+
+            Vec2 ov = Physics::GetOverlap(b, t);
+            if (ov.x <= 0.f || ov.y <= 0.f) continue;
+
+            b->destroy();
+            if (t->hasComponent<CAnimation>()) {
+                auto& ca = t->getComponent<CAnimation>();
+                const std::string n = !ca.name.empty() ? ca.name : ca.animation.getName();
+                if (n == "Brick") t->destroy();
+            }
+            break;
+        }
+    }
 }
 
 void Scene_Play::sDoAction(const Action& action)
 {
-    if (action.isStart())
-    {
-       if      (action.name() == "TOGGLE_TEXTURE")      { m_drawTextures = !m_drawTextures; }
-       else if (action.name() == "TOGGLE_COLLISION")    { m_drawCollision = !m_drawCollision; }
-       else if (action.name() == "TOGGLE_GRID")         { m_drawGrid = !m_drawGrid; }
-       else if (action.name() == "PAUSE")               { setPaused(!m_paused); }
-       else if (action.name() == "QUIT")                { onEnd(); }
-       else if (action.name() == "UP")                  { m_player->getComponent<CInput>().up = true;}
-    }
+    if (!m_player) return;
 
-    else if (action.isEnd())
-    {
-        if (action.name() == "UP")
-        {
-            m_player->getComponent<CInput>().up = false;
-        }
+    auto& in = m_player->getComponent<CInput>();
+
+    if (action.isStart()) {
+        if (action.name() == "UP")    in.up    = true;
+        if (action.name() == "DOWN")  in.down  = true;
+        if (action.name() == "LEFT")  in.left  = true;
+        if (action.name() == "RIGHT") in.right = true;
+
+        if (action.name() == "TOGGLE_TEXTURE")   m_drawTextures  = !m_drawTextures;
+        if (action.name() == "TOGGLE_COLLISION") m_drawCollision = !m_drawCollision;
+        if (action.name() == "TOGGLE_GRID")      m_drawGrid      = !m_drawGrid;
+    } else {
+        if (action.name() == "UP")    in.up    = false;
+        if (action.name() == "DOWN")  in.down  = false;
+        if (action.name() == "LEFT")  in.left  = false;
+        if (action.name() == "RIGHT") in.right = false;
     }
 }
 
@@ -228,81 +393,78 @@ void Scene_Play::onEnd()
     // TODO: When the scene ends, change back to the MENU scene
     //       use m_game->changeScene(correct params);
 }
+void Scene_Play::sRender() {
+    auto& win = m_game->window();
 
-void Scene_Play::sRender()
-{
-    // color the background darker so you know the game is paused
-    if (!m_paused) {m_game->window().clear(sf::Color(100,100, 255)); }
-    else { m_game->window().clear(sf::Color(50, 50, 150)); }
-
-    // set the viewport of teh window to be centered on the player if it's far enough right
-    auto & pPos = m_player->getComponent<CTransform>().pos;
-    float windowCenterX = std::max(m_game->window().getSize().x / 2.0f, pPos.x);
-    sf::View view = m_game->window().getView();
-    view.setCenter(sf::Vector2f{windowCenterX, m_game->window().getSize().y - view.getCenter().y});
-
-    // draw al Entity textures / animations
-    if (m_drawTextures)
+    // set camera
     {
-        for (auto e : m_entityManager.getEntities())
-        {
-            auto & transform = e->getComponent<CTransform>();
+        auto size = win.getSize();
+        sf::View view = win.getView();
+        if (m_player && m_player->hasComponent<CTransform>()) {
+            const auto& p = m_player->getComponent<CTransform>().pos;
+            float cx = std::max(size.x * 0.5f, p.x);
+            view.setCenter(sf::Vector2f{cx, size.y * 0.5f});
+        } else {
+            view.setCenter(sf::Vector2f{size.x * 0.5f, size.y * 0.5f});
+        }
+        win.setView(view);
+    }
 
-            if (e->hasComponent<CAnimation>())
-            {
-                auto & animation = e->getComponent<CAnimation>().animation;
-                animation.getSprite().setRotation(sf::degrees(transform.angle));
-                animation.getSprite().setPosition(sf::Vector2f(transform.pos.x, transform.pos.y));
-                animation.getSprite().setScale(sf::Vector2f(transform.scale.x, transform.scale.y));
-                m_game->window().draw(animation.getSprite());
-            }
+    // draw entities once, honoring toggles
+    for (auto& e : m_entityManager.getEntities()) {
+        auto& tf = e->getComponent<CTransform>();
+        auto& ca = e->getComponent<CAnimation>();
+        auto& sh = e->getComponent<CShape>();
+
+        if (m_drawTextures && ca.has) {
+            auto& spr = ca.animation.getSprite();
+            spr.setPosition(sf::Vector2f{tf.pos.x, tf.pos.y});
+            spr.setScale   (sf::Vector2f{tf.scale.x, tf.scale.y});
+            spr.setRotation(sf::degrees(tf.angle));
+            win.draw(spr);
+        } else if (sh.has && sh.shape) {
+            sh.shape->setPosition(sf::Vector2f{tf.pos.x, tf.pos.y});
+            sh.shape->setScale   (sf::Vector2f{tf.scale.x, tf.scale.y});
+            sh.shape->setRotation(sf::degrees(tf.angle));
+            win.draw(*sh.shape);
         }
     }
 
-    // draw all Entity collision bounding boxes with a rectangleshape
-    if (m_drawCollision)
-    {
-        for (auto e : m_entityManager.getEntities())
-        {
-            if (e->hasComponent<CBoundingBox>())
-            {
-                auto & box = e->getComponent<CBoundingBox>();
-                auto & transform = e->getComponent<CTransform>();
-                sf::RectangleShape rect;
-                rect.setSize(sf::Vector2f(box.size.x-1, box.size.y-1));
-                rect.setOrigin(sf::Vector2f(box.halfSize.x, box.halfSize.y));
-                rect.setPosition(sf::Vector2f{transform.pos.x, transform.pos.y});
-                rect.setFillColor(sf::Color(0, 0, 0, 0));
-                rect.setOutlineColor(sf::Color(255, 255, 255, 255));
-                rect.setOutlineThickness(1);
-                m_game->window().draw(rect);
-            }
+    // collision boxes
+    if (m_drawCollision) {
+        for (auto& e : m_entityManager.getEntities()) {
+            if (!e->hasComponent<CBoundingBox>()) continue;
+            const auto& box = e->getComponent<CBoundingBox>();
+            const auto& tr  = e->getComponent<CTransform>();
+            sf::RectangleShape r;
+            r.setSize(sf::Vector2f{box.size.x - 1.f, box.size.y - 1.f});
+            r.setOrigin(sf::Vector2f{box.halfSize.x, box.halfSize.y});
+            r.setPosition(sf::Vector2f{tr.pos.x, tr.pos.y});
+            r.setFillColor(sf::Color(0,0,0,0));
+            r.setOutlineColor(sf::Color(255,255,255,255));
+            r.setOutlineThickness(1.f);
+            win.draw(r);
         }
     }
 
-    // draw the grid so that students can easily debug
-    if (m_drawGrid)
-    {
-        float leftX = 0.f;
-        float rightX = leftX + m_gridSize.x;
-        float nextGridX = leftX - ((int)leftX % (int)m_gridSize.x);
+    // grid
+    if (m_drawGrid) {
+        float leftX   = 0.f;
+        float rightX  = static_cast<float>(width());
+        float nextGX  = leftX - std::fmod(leftX, m_gridSize.x);
 
-        for (float x = nextGridX; x < rightX; x += m_gridSize.x)
-        {
-            drawLine(Vec2(x, 0), Vec2(x, height()));
-        }
+        for (float x = nextGX; x < rightX; x += m_gridSize.x)
+            drawLine(Vec2{x, 0.f}, Vec2{x, static_cast<float>(height())});
 
-        for (float y = 0; y < height(); y += m_gridSize.y)
-        {
-            drawLine(Vec2(leftX, height() - y), Vec2(rightX, height() - y));
-
-            for (float x = nextGridX; x < rightX; x += m_gridSize.x)
-            {
-                std::string xCell = std::to_string((int)x / (int)m_gridSize.x);
-                std::string yCell = std::to_string((int)x / (int)m_gridSize.y);
+        for (float y = 0.f; y < height(); y += m_gridSize.y) {
+            drawLine(Vec2{leftX, static_cast<float>(height()) - y},
+                     Vec2{rightX, static_cast<float>(height()) - y});
+            for (float x = nextGX; x < rightX; x += m_gridSize.x) {
+                std::string xCell = std::to_string(static_cast<int>(x / m_gridSize.x));
+                std::string yCell = std::to_string(static_cast<int>(y / m_gridSize.y));
                 m_gridText.setString("(" + xCell + "," + yCell + ")");
-                m_gridText.setPosition(sf::Vector2f(x + 3, height() - y - m_gridSize.y + 2));
-                m_game->window().draw(m_gridText);
+                m_gridText.setPosition(sf::Vector2f{x + 3.f, static_cast<float>(height()) - y - m_gridSize.y + 2.f});
+                win.draw(m_gridText);
             }
         }
     }
