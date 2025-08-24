@@ -1,35 +1,25 @@
 #pragma once
 #include <SFML/Graphics.hpp>
 #include <vector>
-#include <string>
 
-struct Animation {
-    std::string texture;
-    std::vector<sf::IntRect> frames;
-    float frameTime = 0.1f;
-    bool loop = true;
+class Animation
+{
+    sf::Sprite  m_sprite;
+    size_t      m_frameCount   = 1;
+    size_t      m_currenFrame  = 0;
+    size_t      m_speed        = 0;
+    Vec2        m_size         = { 1, 1};
+    std::string m_name         = "none";
 
-    // runtime
-    float time = 0.f;
-    std::size_t index = 0;
-    bool finished = false;
+public:
 
-    Animation() = default;
-    Animation(std::string tex, std::vector<sf::IntRect> f, float ft, bool lp=true)
-    : texture(std::move(tex)), frames(std::move(f)), frameTime(ft), loop(lp) {}
+    Animation();
+    Animation(const std::string & name, const sf::Texture & t);
+    Animation(const std::string & name, const sf::Texture & t, size_t frameCount, size_t speed);
 
-    void reset() { time=0.f; index=0; finished=false; }
-    void update(float dt) {
-        if (finished || frames.empty()) return;
-        time += dt;
-        while (time >= frameTime) {
-            time -= frameTime;
-            index++;
-            if (index >= frames.size()) {
-                if (loop) index = 0;
-                else { index = frames.size()-1; finished = true; }
-            }
-        }
-    }
-    const sf::IntRect& rect() const { return frames[index]; }
+    void update();
+    bool hasEnded() const;
+    const std::string & getName() const;
+    const Vec2 & getSize() const;
+    sf::Sprite & getSprite();
 };

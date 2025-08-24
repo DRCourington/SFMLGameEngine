@@ -6,36 +6,66 @@
 
 class EntityManager;
 
+typedef std::tuple<
+    CTransform,
+    CLifespan,
+    CInput,
+    CBoundingBox,
+    CAnimation,
+    CGravity,
+    CState
+> ComponentTuple;
+
 class Entity
 {
     friend class EntityManager;
 
-    bool        m_active = true;
-    size_t      m_id     = 0;
-    std::string m_tag    = "default";
+    bool           m_active = true;
+    size_t         m_id     = 0;
+    std::string    m_tag    = "default";
+    ComponentTuple m_components;
 
-    // constructor and destructor
-    Entity(const size_t id, const std::string& tag)
-        : m_id(id), m_tag(tag) {}
+    // constructor is private so we can never create
+    // entities outside the EntityManager which had friend access
+    Entity(const size_t id, const std::string& tag);
 
 public:
 
-    // component pointers
-    std::unique_ptr<CTransform> cTransform;
-    std::unique_ptr<CShape>     cShape;
-    std::unique_ptr<CCollision> cCollision;
-    std::unique_ptr<CInput>     cInput;
-    std::unique_ptr<CScore>     cScore;
-    std::unique_ptr<CLifespan>  cLifespan;
-    std::unique_ptr<CBounds>    cBounds;
+    void   destroy();
+    size_t id()                const;
+    bool   isActive()          const;
+    const  std::string & tag() const;
 
-    // private member access functions
-    bool isActive() const {return m_active;}
-    const std::string & tag() const {return m_tag;}
-    const size_t id() const {return m_id;}
-    void destroy() {m_active = false;}
+    template <typename T>
+    bool hasComponent() const
+    {
+        return getComponent<T>().has;
+    }
 
-    void addTransform(float x=0, float y=0, float vx=0, float vy=0, float angle=0) {
-        cTransform = std::make_unique<CTransform>(Vec2(x,y), Vec2(vx,vy), angle);
+    template <typename T, typename... TArgs>
+    T & addComponent(TArgs&&... mArgs)
+    {
+        auto & component = getComponent<T>();
+        component = T(std::forward<TArgs>(mArgs)...);
+        component.has = true;
+        return component;
+    }
+
+    template <typename T>
+    T & getComponent()
+    {
+        return std::get<T>(m_components);
+    }
+
+    template <typename T>
+    const T& getComponent() const
+    {
+        return std::get<T>(m_components);
+    }
+
+    template <typename T>
+    void removeComponent()
+    {
+        getComponent<T>() = T();
     }
 };
